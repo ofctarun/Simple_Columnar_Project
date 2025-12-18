@@ -1,72 +1,127 @@
-Below is the complete, formatted content for your README.md. You can copy this directly into your file.
+# Simple Columnar File Format (SCF)
 
-Simple Columnar File Format (SCF)
-=================================
+## Project Overview
 
-Project Overview
-----------------
+This project implements a custom **binary columnar file format** from scratch, designed for high‑performance analytical data access. Unlike traditional row‑based formats such as CSV, this format stores data **column by column**, enabling efficient **column pruning**, reduced disk I/O, and better compression.
 
-This project implements a custom binary columnar file format from scratch, designed for high-performance analytical data access. Unlike traditional row-based formats (like CSV), this format stores data column-by-column, allowing for **Selective Column Reading** (Column Pruning) and efficient compression.
+The implementation fulfills the requirements of the **"Build a Simple Columnar File Format from Scratch"** task and demonstrates core concepts used in modern analytical storage engines.
 
-This project satisfies the requirements for the "Build a Simple Columnar File Format from Scratch" task.
+---
 
-Features
---------
+## Key Features
 
-*   **Binary Layout**: Implements a custom header-based binary specification.
-    
-*   **Columnar Storage**: Each column's data is stored in a contiguous block.
-    
-*   **Compression**: Every data block is compressed using the zlib algorithm to save disk space.
-    
-*   **Efficient Seeking**: Uses metadata offsets to jump directly to specific columns without reading the entire file.
-    
-*   **Type Support**: Handles 32-bit integers, 64-bit floating points, and variable-length UTF-8 strings.
-    
+- **Custom Binary Layout**  
+  A well‑defined header‑based binary specification for metadata and data blocks.
 
-Project Structure
------------------
+- **Columnar Storage Model**  
+  Each column is stored as a contiguous compressed block on disk.
 
-Plaintext
+- **Compression**  
+  All column data blocks are compressed using the `zlib` algorithm to reduce file size.
 
-Plain textANTLR4BashCC#CSSCoffeeScriptCMakeDartDjangoDockerEJSErlangGitGoGraphQLGroovyHTMLJavaJavaScriptJSONJSXKotlinLaTeXLessLuaMakefileMarkdownMATLABMarkupObjective-CPerlPHPPowerShell.propertiesProtocol BuffersPythonRRubySass (Sass)Sass (Scss)SchemeSQLShellSwiftSVGTSXTypeScriptWebAssemblyYAMLXML`   simple-columnar-format/  ├── src/  │   ├── writer.py    # Logic for serializing and compressing data  │   ├── reader.py    # Logic for parsing and selective reading  │   └── __init__.py  ├── converter.py     # CLI tool for CSV <-> SCF conversion  ├── SPEC.md          # Formal binary format specification  ├── README.md        # Project documentation and usage  └── test.csv         # Sample input data   `
+- **Efficient Random Access**  
+  Metadata includes byte offsets, allowing direct `seek()` access to individual columns without scanning the entire file.
 
-Installation
-------------
+- **Data Type Support**  
+  - 32‑bit integers (`int32`)  
+  - 64‑bit floating‑point numbers (`float64`)  
+  - Variable‑length UTF‑8 encoded strings
 
-The project uses the Python standard library. No external dependencies are required.
+---
 
-*   **Python Version**: 3.6+ recommended.
-    
+## Project Structure
 
-Usage
------
+```
+.
+├── src/
+│   ├── reader.py        # SCFReader for selective column reading
+│   ├── writer.py        # Binary writer for SCF format
+│   └── utils.py         # Encoding, decoding, and compression helpers
+├── converter.py         # CLI tool for CSV ↔ SCF conversion
+├── test.csv             # Sample input CSV
+├── output.scf           # Generated columnar file
+└── README.md
+```
 
-### 1\. Convert CSV to Custom Format (csv\_to\_custom)
+---
 
-To convert a standard CSV file into the .scf format:
+## Installation
 
-Bash
+This project relies entirely on the **Python standard library**.
 
-Plain textANTLR4BashCC#CSSCoffeeScriptCMakeDartDjangoDockerEJSErlangGitGoGraphQLGroovyHTMLJavaJavaScriptJSONJSXKotlinLaTeXLessLuaMakefileMarkdownMATLABMarkupObjective-CPerlPHPPowerShell.propertiesProtocol BuffersPythonRRubySass (Sass)Sass (Scss)SchemeSQLShellSwiftSVGTSXTypeScriptWebAssemblyYAMLXML`   python converter.py to_custom test.csv output.scf   `
+- **Python Version**: 3.6 or higher
+- **External Dependencies**: None
 
-### 2\. Convert Custom Format back to CSV (custom\_to\_csv)
+No additional installation steps are required.
 
-To reconstruct the original data from the binary file:
+---
 
-Bash
+## Usage
 
-Plain textANTLR4BashCC#CSSCoffeeScriptCMakeDartDjangoDockerEJSErlangGitGoGraphQLGroovyHTMLJavaJavaScriptJSONJSXKotlinLaTeXLessLuaMakefileMarkdownMATLABMarkupObjective-CPerlPHPPowerShell.propertiesProtocol BuffersPythonRRubySass (Sass)Sass (Scss)SchemeSQLShellSwiftSVGTSXTypeScriptWebAssemblyYAMLXML`   python converter.py to_csv output.scf back_to_original.csv   `
+### 1. Convert CSV to SCF Format
 
-### 3\. Selective Column Reading
+Convert a standard CSV file into the custom `.scf` columnar format:
 
-The reader is designed to allow developers to load only the columns they need. This is a core feature for performance optimization in data engineering:
+```bash
+python converter.py to_custom test.csv output.scf
+```
 
-Python
+---
 
-Plain textANTLR4BashCC#CSSCoffeeScriptCMakeDartDjangoDockerEJSErlangGitGoGraphQLGroovyHTMLJavaJavaScriptJSONJSXKotlinLaTeXLessLuaMakefileMarkdownMATLABMarkupObjective-CPerlPHPPowerShell.propertiesProtocol BuffersPythonRRubySass (Sass)Sass (Scss)SchemeSQLShellSwiftSVGTSXTypeScriptWebAssemblyYAMLXML`   from src.reader import SCFReader  reader = SCFReader("output.scf")  # This only reads the 'name' column, skipping 'id' and 'score' on disk  data = reader.read_columns(["name"])  print(data)   `
+### 2. Convert SCF Back to CSV
 
-Performance Note
-----------------
+Reconstruct the original CSV data from an SCF file:
 
-By using byte offsets stored in the header, the reader performs an f.seek() operation to jump straight to the requested data. In large-scale systems, this is significantly faster than parsing a full CSV file because it minimizes disk I/O.
+```bash
+python converter.py to_csv output.scf back_to_original.csv
+```
+
+---
+
+### 3. Selective Column Reading (Column Pruning)
+
+One of the main advantages of SCF is the ability to read **only required columns** directly from disk.
+
+```python
+from src.reader import SCFReader
+
+reader = SCFReader("output.scf")
+
+# Reads only the 'name' column, skipping others on disk
+data = reader.read_columns(["name"])
+
+print(data)
+```
+
+This approach avoids unnecessary disk reads and decompression, improving performance for analytical workloads.
+
+---
+
+## Performance Notes
+
+The SCF reader uses column metadata stored in the file header to perform direct `f.seek()` operations. This enables:
+
+- Minimal disk I/O
+- Faster query execution for large datasets
+- Efficient analytical access patterns
+
+Compared to CSV parsing, this design scales significantly better for read‑heavy and column‑oriented workloads.
+
+---
+
+## Learning Outcomes
+
+This project demonstrates:
+
+- Binary file format design
+- Columnar data storage principles
+- Compression techniques
+- Efficient file seeking and offset‑based access
+- Foundations of modern data warehouse file formats (e.g., Parquet, ORC)
+
+---
+
+## License
+
+This project is provided for educational purposes. You are free to use, modify, and extend it as needed.
+
