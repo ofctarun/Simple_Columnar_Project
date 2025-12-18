@@ -1,65 +1,61 @@
 import struct
 import zlib
 import json
+import os
 
 class SCFReader:
     def __init__(self, filename):
         self.filename = filename
+        self.metadata = {}
+        self.columns = {}
+        self.row_count = 0
         self._load_metadata()
 
     def _load_metadata(self):
+        file_size = os.path.getsize(self.filename)
         with open(self.filename, 'rb') as f:
+            # Read Footer: last 12 bytes [Offset(8) + Magic(4)]
+            f.seek(file_size - 12)
+            meta_offset = struct.unpack('<Q', f.read(8))[0]
             magic = f.read(4)
+            
             if magic != b"SCF1":
                 raise ValueError("Not a valid SCF file!")
             
-            meta_size = struct.unpack('<I', f.read(4))[0]
-            meta_json = f.read(meta_size).decode('utf-8')
+            # Read JSON metadata
+            f.seek(meta_offset)
+            meta_len = (file_size - 12) - meta_offset
+            meta_json = f.read(meta_len).decode('utf-8')
+            
             self.metadata = json.loads(meta_json)
             self.row_count = self.metadata['row_count']
             self.columns = {c['name']: c for c in self.metadata['columns']}
 
     def read_columns(self, column_names=None):
-        """Reads specific columns. If None, reads all."""
         if column_names is None:
             column_names = list(self.columns.keys())
 
         results = {}
         with open(self.filename, 'rb') as f:
             for name in column_names:
-                col_meta = self.columns[name]
-                
-                # SEEK directly to the column's starting position
-                f.seek(col_meta['offset'])
-                
-                # Read only the compressed block for THIS column
-                compressed_data = f.read(col_meta['compressed_size'])
-                raw_data = zlib.decompress(compressed_data)
-                
-                results[name] = self._deserialize_column(raw_data, col_meta['type'])
+                if name not in self.columns: continue
+                col = self.columns[name]
+                f.seek(col['offset'])
+                raw_bytes = zlib.decompress(f.read(col['compressed_size']))
+                results[name] = self._deserialize_column(raw_bytes, col['type'])
         return results
 
     def _deserialize_column(self, buffer, data_type):
         data = []
-        offset = 0
-        
         if data_type == 'int32':
-            while offset < len(buffer):
-                data.append(struct.unpack_it('<i', buffer[offset:offset+4])[0])
-                offset += 4
-        
+            for val in struct.iter_unpack('<i', buffer): data.append(val[0])
         elif data_type == 'float64':
-            while offset < len(buffer):
-                data.append(struct.unpack_it('<d', buffer[offset:offset+8])[0])
-                offset += 8
-                
+            for val in struct.iter_unpack('<d', buffer): data.append(val[0])
         elif data_type == 'string':
+            offset = 0
             while offset < len(buffer):
-                str_len = struct.unpack_it('<I', buffer[offset:offset+4])[0]
+                s_len = struct.unpack_from('<I', buffer, offset)[0]
                 offset += 4
-                data.append(buffer[offset:offset+str_len].decode('utf-8'))
-                offset += str_len
-                
+                data.append(buffer[offset:offset+s_len].decode('utf-8'))
+                offset += s_len
         return data
-
-# Note: struct.unpack_it is used for efficiency in loops
